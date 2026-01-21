@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mô phỏng thí nghiệm đo gia tốc rơi tự do</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js & Controls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Chart.js for Graphing (Fixed UMD version) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- MathJax for LaTeX -->
+    <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']]
+      }
+    };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+        
+        body { font-family: 'Roboto', sans-serif; overflow: hidden; background-color: #1a202c; }
+        #canvas-container { width: 100%; height: 100vh; display: block; }
+        
+        /* Digital Clock Font Effect */
+        @font-face {
+            font-family: 'Digital';
+            src: url('https://fonts.cdnfonts.com/s/14925/Digital7Mono-B1g5.woff') format('woff');
+        }
+        .digital-font { font-family: 'Digital', monospace; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.92); 
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        /* Custom Scrollbar for Results */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 2px; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Control Panel (Left) -->
+    <div class="absolute top-2 left-2 z-10 w-64 glass-panel p-3 shadow-xl transform scale-90 origin-top-left">
+        <h1 class="text-lg font-bold text-blue-700 mb-2 border-b pb-1 flex items-center gap-2">
+            <i class="fas fa-flask"></i> Mô phỏng thí nghiệm đo gia tốc rơi tự do
+        </h1>
+        
+        <div class="mb-3">
+            <label class="block text-xs font-semibold mb-1 text-gray-600">
+                Quãng đường đo ($s$): <span id="heightDisplay" class="text-blue-600 font-bold">0.50</span> m
+            </label>
+            <input type="range" id="heightSlider" min="0.2" max="0.8" step="0.05" value="0.5" 
+                   class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-600">
+            <div class="flex justify-between text-[10px] text-gray-500 mt-1">
+                <span>0.2m</span>
+                <span>0.8m</span>
+            </div>
+            <p class="text-[10px] text-gray-500 mt-0.5 italic">
+                *Điều chỉnh vị trí cổng quang
+            </p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 mb-3">
+            <button id="btnDrop" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1.5 px-2 text-xs rounded shadow transition flex items-center justify-center gap-1">
+                <i class="fas fa-play"></i> Thả bi
+            </button>
+            <button id="btnReset" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-1.5 px-2 text-xs rounded shadow transition flex items-center justify-center gap-1">
+                <i class="fas fa-redo"></i> Làm lại
+            </button>
+        </div>
+
+        <div class="bg-black text-red-500 p-2 rounded border-2 border-gray-400 text-center mb-3 shadow-inner relative">
+            <div class="text-[10px] text-gray-400 tracking-widest mb-0 uppercase">Đồng hồ hiện số (s)</div>
+            <div id="timerDisplay" class="text-3xl digital-font tracking-widest">0.000</div>
+        </div>
+
+        <div class="text-xs bg-blue-50 p-2 rounded text-blue-800 border border-blue-200">
+            <p class="font-bold mb-1 border-b border-blue-200 pb-0.5 uppercase text-[10px]">Thông số & dụng cụ</p>
+            <div class="space-y-0.5">
+                <div class="flex justify-between items-center text-[10px]">
+                    <span>Sai số dụng cụ s:</span>
+                    <span class="font-mono font-bold">$\Delta s_{dc} = 1 mm$</span>
+                </div>
+                <div class="flex justify-between items-center text-[10px]">
+                    <span>Sai số dụng cụ t:</span>
+                    <span class="font-mono font-bold">$\Delta t_{dc} = 1 ms$</span>
+                </div>
+                <div class="border-t border-blue-100 my-1 pt-0.5"></div>
+                <div class="text-[10px]">
+                    <p class="mb-0.5">Lý thuyết:</p>
+                    <p class="font-mono text-center mb-0">$s = \frac{1}{2}gt^2$</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results & Graph Panel (Right) -->
+    <div class="absolute top-2 right-2 z-10 w-80 glass-panel p-3 overflow-hidden flex flex-col max-h-[95vh] shadow-xl transform scale-90 origin-top-right">
+        <!-- Tabs -->
+        <div class="flex border-b border-gray-200 mb-2">
+            <button id="tabTable" class="flex-1 py-1.5 px-1 text-xs font-bold text-blue-600 border-b-2 border-blue-600 focus:outline-none transition-colors">
+                <i class="fas fa-table"></i> Xử lý số liệu
+            </button>
+            <button id="tabGraph" class="flex-1 py-1.5 px-1 text-xs font-medium text-gray-500 hover:text-blue-600 focus:outline-none transition-colors">
+                <i class="fas fa-chart-line"></i> Đồ thị $s \sim t^2$
+            </button>
+        </div>
+
+        <!-- View Table -->
+        <div id="viewTable" class="flex-1 overflow-hidden flex flex-col">
+            <!-- Data Table -->
+            <div class="overflow-y-auto flex-1 pr-1 mb-2 max-h-40">
+                <table class="w-full text-xs text-left border-collapse">
+                    <thead class="text-gray-700 bg-gray-100 sticky top-0 font-bold z-10 text-[10px]">
+                        <tr>
+                            <th class="px-1 py-1.5 text-center border-b">#</th>
+                            <th class="px-1 py-1.5 text-center border-b">$s (m)$</th>
+                            <th class="px-1 py-1.5 text-center border-b">$t (s)$</th>
+                            <th class="px-1 py-1.5 text-center border-b text-blue-700">$g_i$</th>
+                            <th class="px-1 py-1.5 text-center border-b text-red-600">$\Delta g_i$</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody" class="text-[11px]"></tbody>
+                </table>
+                <div id="emptyState" class="text-center text-gray-400 py-6 italic text-[10px]">
+                    Chưa có dữ liệu.<br>Nhấn "Thả bi" để đo.
+                </div>
+            </div>
+
+            <!-- Detailed Stats Section (Standardized Terms) -->
+            <div class="bg-gray-50 p-2 rounded border border-gray-200 text-[10px]">
+                <h3 class="font-bold text-gray-700 border-b border-gray-300 pb-1 mb-1">Kết quả tính toán:</h3>
+                
+                <div class="grid grid-cols-1 gap-y-1">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Giá trị trung bình ($\overline{g}$):</span>
+                        <span class="font-mono font-bold text-blue-700" id="val_avg_g">--</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Sai số tuyệt đối TB ($\overline{\Delta g}$):</span>
+                        <span class="font-mono font-bold text-gray-600" id="val_avg_delta">--</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Sai số dụng cụ ($\Delta g_{dc}$):</span>
+                        <span class="font-mono font-bold text-gray-600" id="val_inst_error">--</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Sai số tuyệt đối của phép đo ($\Delta g$):</span>
+                        <span class="font-mono font-bold text-red-600" id="val_total_error">--</span>
+                    </div>
+                </div>
+
+                <div class="mt-2 pt-1 border-t border-gray-300">
+                    <div class="flex justify-between items-center">
+                        <span class="font-bold text-gray-700">Kết quả đo:</span>
+                        <span class="font-mono font-bold text-base text-blue-800">
+                            $g = $ <span id="res_g">--</span> $\pm$ <span id="res_err">--</span>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View Graph -->
+        <div id="viewGraph" class="hidden flex-1 flex flex-col items-center justify-center bg-white rounded p-1 border relative h-full">
+            <div class="relative w-full h-48 mb-1">
+                <canvas id="experimentChart"></canvas>
+            </div>
+            
+            <button id="btnDrawTrendline" class="w-full bg-blue-100 hover:bg-blue-200 text-blue-700 font-bold py-1.5 px-2 rounded text-[10px] mb-2 transition-colors border border-blue-300 shadow-sm">
+                <i class="fas fa-chart-line"></i> Vẽ đường xu hướng & Hiện hàm mô tả
+            </button>
+
+            <div id="regressionContainer" class="w-full hidden space-y-1">
+                <div id="regressionEquation" class="text-[11px] text-blue-800 font-bold text-center bg-blue-50 p-1.5 rounded border border-blue-100 w-full shadow-sm">
+                    Hàm mô tả: $s = ...$
+                </div>
+                <div id="graphConclusion" class="text-[11px] text-red-700 font-bold text-center bg-red-50 p-1.5 rounded border border-red-100 w-full shadow-sm">
+                    Kết luận: ...
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-2 pt-2 border-t border-gray-200">
+             <button id="btnClearData" class="w-full text-[10px] text-red-500 hover:text-red-700 hover:bg-red-50 py-1 rounded transition text-center px-1 font-semibold">
+                <i class="fas fa-trash-alt"></i> Xóa dữ liệu & Làm lại từ đầu
+            </button>
+        </div>
+    </div>
+
+    <!-- 3D Canvas -->
+    <div id="canvas-container"></div>
+
+    <script>
+        // --- CẤU HÌNH VẬT LÝ & DỤNG CỤ ---
+        const REAL_GRAVITY = 9.81; 
+        const INST_ERR_S = 0.001; // 1mm
+        const INST_ERR_T = 0.001; // 1ms
+        
+        // Cấu hình không gian 3D
+        const BASE_Y = 0; 
+        const PILLAR_HEIGHT = 1.2;
+        const MAGNET_Y = 1.1; // Vị trí cố định của nam châm (cao gần đỉnh trụ)
+        const BALL_RADIUS = 0.015;
+        const GROUND_Y = 0.02; // Mặt sàn
+
+        // Biến trạng thái
+        let measurementDistance = 0.5; // Giá trị s hiện tại (m)
+        let isDropping = false;
+        let isFinished = false; 
+        let startTime = 0;
+        let measuredTime = 0; 
+        let totalFallTime = 0; 
+        let lastTimerStr = ""; 
+        let ballStartY = 0; // Biến toàn cục lưu vị trí thả bi thực tế
+        
+        // Lưu trữ dữ liệu đo
+        let measurements = []; 
+        let currentAvgG = 0; 
+        
+        // --- BIẾN THREE.JS ---
+        let scene, camera, renderer, controls;
+        let ball, magnet, pillar, photogate, timerBox, catchBox;
+        let gateWire, magnetWire;
+        let sIndicator; 
+        
+        // Đồng hồ texture dynamic
+        let timerCanvas, timerContext, timerTexture;
+
+        // --- CHART.JS CONFIG ---
+        let chartInstance = null;
+
+        // --- CÁC HÀM XỬ LÝ SỐ LIỆU & BIỂU ĐỒ ---
+
+        function initChart() {
+            if (typeof Chart === 'undefined') return;
+            const ctx = document.getElementById('experimentChart').getContext('2d');
+            Chart.defaults.font.family = "'Roboto', sans-serif";
+            
+            chartInstance = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'TN', 
+                        data: [],
+                        backgroundColor: 'rgba(37, 99, 235, 0.8)', 
+                        borderColor: 'rgba(37, 99, 235, 1)',
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }, {
+                        label: 'Hồi quy',
+                        data: [],
+                        type: 'line',
+                        borderColor: 'rgba(220, 38, 38, 0.6)', 
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        borderDash: [0, 0] 
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: { display: true, text: 't² (s²)', font: { weight: 'bold', size: 10 } },
+                            min: 0,
+                            grid: { color: '#f3f4f6' },
+                            ticks: { font: { size: 9 } }
+                        },
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            title: { display: true, text: 's (m)', font: { weight: 'bold', size: 10 } },
+                            min: 0,
+                            grid: { color: '#f3f4f6' },
+                            ticks: { font: { size: 9 } }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 8, font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function updateChartData(data) {
+            if (!chartInstance) return;
+            const points = data.map(m => ({x: m.t2, y: m.s}));
+            chartInstance.data.datasets[0].data = points;
+            chartInstance.data.datasets[1].data = [];
+            document.getElementById('regressionContainer').classList.add('hidden');
+            chartInstance.update();
+        }
+
+        // Hàm vẽ đường xu hướng dựa trên G trung bình (A = g_tb / 2)
+        function drawTrendline() {
+            if (!chartInstance || measurements.length < 1) {
+                alert("Cần có dữ liệu đo để vẽ đường xu hướng.");
+                return;
+            }
+
+            const A = currentAvgG / 2;
+            const points = measurements.map(m => ({x: m.t2, y: m.s}));
+            const maxT2 = Math.max(...points.map(p => p.x));
+            const maxX = maxT2 * 1.2;
+            const y1 = 0; 
+            const y2 = A * maxX; 
+            
+            chartInstance.data.datasets[1].data = [{x: 0, y: y1}, {x: maxX, y: y2}];
+            chartInstance.update();
+
+            // Hiển thị phương trình: s = A * t^2
+            const equation = `s = ${A.toFixed(3)} \\cdot t^2`;
+            // SỬA: Đổi g_tb thành \overline{g} cho khớp với bên Xử lý số liệu
+            const conclusion = `Kết luận: Giá trị trung bình của gia tốc rơi tự do $\\overline{g} = ${(A*2).toFixed(2)} m/s^2$`;
+            
+            const container = document.getElementById('regressionContainer');
+            const eqDiv = document.getElementById('regressionEquation');
+            const concDiv = document.getElementById('graphConclusion');
+            
+            container.classList.remove('hidden');
+            eqDiv.innerHTML = `Hàm mô tả: $${equation}$`;
+            concDiv.innerHTML = conclusion;
+            
+            if (window.MathJax) MathJax.typesetPromise([eqDiv, concDiv]);
+        }
+
+        function updateTableAndStats() {
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = ''; 
+
+            if (measurements.length === 0) {
+                document.getElementById('emptyState').style.display = 'block';
+                document.getElementById('val_avg_g').innerText = '--';
+                document.getElementById('val_avg_delta').innerText = '--';
+                document.getElementById('val_inst_error').innerText = '--';
+                document.getElementById('val_total_error').innerText = '--';
+                document.getElementById('res_g').innerText = '--';
+                document.getElementById('res_err').innerText = '--';
+                document.getElementById('regressionContainer').classList.add('hidden');
+                currentAvgG = 0;
+                updateChartData([]);
+                return;
+            }
+
+            document.getElementById('emptyState').style.display = 'none';
+
+            const sumG = measurements.reduce((acc, m) => acc + m.g, 0);
+            const avgG = sumG / measurements.length;
+            currentAvgG = avgG; 
+
+            let sumDeltaG = 0;
+            measurements.forEach((m, index) => {
+                const deltaGi = Math.abs(m.g - avgG);
+                sumDeltaG += deltaGi;
+                const row = document.createElement('tr');
+                row.className = "bg-white border-b hover:bg-gray-50 transition-colors";
+                row.innerHTML = `
+                    <td class="px-1 py-1 text-center text-gray-500">${index + 1}</td>
+                    <td class="px-1 py-1 text-center">${m.s.toFixed(3)}</td>
+                    <td class="px-1 py-1 text-center font-mono text-gray-700">${m.t.toFixed(3)}</td>
+                    <td class="px-1 py-1 text-center font-bold text-blue-700">${m.g.toFixed(2)}</td>
+                    <td class="px-1 py-1 text-center text-red-600 italic">${deltaGi.toFixed(2)}</td>
+                `;
+                tbody.prepend(row); 
+            });
+
+            const avgDeltaG = sumDeltaG / measurements.length; 
+            const avgS = measurements.reduce((acc, m) => acc + m.s, 0) / measurements.length;
+            const avgT = measurements.reduce((acc, m) => acc + m.t, 0) / measurements.length;
+            
+            const relativeErrorS = INST_ERR_S / avgS;
+            const relativeErrorT = INST_ERR_T / avgT;
+            const instErrorG = avgG * (relativeErrorS + 2 * relativeErrorT);
+            const totalError = avgDeltaG + instErrorG;
+
+            document.getElementById('val_avg_g').innerText = avgG.toFixed(2);
+            document.getElementById('val_avg_delta').innerText = avgDeltaG.toFixed(3);
+            document.getElementById('val_inst_error').innerText = instErrorG.toFixed(3);
+            document.getElementById('val_total_error').innerText = totalError.toFixed(2);
+            document.getElementById('res_g').innerText = avgG.toFixed(2);
+            document.getElementById('res_err').innerText = totalError.toFixed(2);
+
+            updateChartData(measurements);
+            if (window.MathJax) MathJax.typesetPromise();
+        }
+
+        // --- 3D SCENE ---
+        function createLabEnvironment() {
+            const planeGeometry = new THREE.PlaneGeometry(10, 10);
+            const planeMaterial = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, roughness: 0.8, metalness: 0.1 });
+            const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+            plane.rotation.x = -Math.PI / 2;
+            plane.position.y = BASE_Y;
+            plane.receiveShadow = true;
+            scene.add(plane);
+            const gridHelper = new THREE.GridHelper(10, 20, 0xcccccc, 0xe5e5e5);
+            scene.add(gridHelper);
+        }
+
+        function createRulerTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 1024;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#e0e0e0'; ctx.fillRect(0, 0, 128, 1024);
+            ctx.fillStyle = '#333'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'right';
+            const pixelsPerMeter = 1024 / 1.2;
+            for (let cm = 0; cm <= 120; cm++) {
+                const y = 1024 - (cm / 100) * pixelsPerMeter;
+                if (cm % 10 === 0) {
+                    ctx.fillRect(60, y, 68, 4);
+                    ctx.save(); ctx.translate(50, y + 8); ctx.scale(1, -1); 
+                    ctx.fillText((cm/100).toFixed(1), 0, 0); ctx.restore();
+                } else if (cm % 5 === 0) { ctx.fillRect(90, y, 38, 2); } 
+                else { ctx.fillRect(100, y, 28, 1); }
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function initTimerTexture() {
+            timerCanvas = document.createElement('canvas');
+            timerCanvas.width = 512; 
+            timerCanvas.height = 256;
+            timerContext = timerCanvas.getContext('2d');
+            timerTexture = new THREE.CanvasTexture(timerCanvas);
+            updateTimerDisplay("0.000");
+            return timerTexture;
+        }
+
+        function updateTimerDisplay(text) {
+            if (!timerContext) return;
+            timerContext.fillStyle = '#333';
+            timerContext.fillRect(0, 0, 512, 256);
+            timerContext.fillStyle = '#8fbc8f'; 
+            timerContext.fillRect(40, 40, 432, 120);
+            timerContext.fillStyle = '#000';
+            timerContext.font = 'bold 80px monospace';
+            timerContext.textAlign = 'center';
+            timerContext.textBaseline = 'middle';
+            timerContext.fillText(text, 256, 100);
+            timerContext.fillStyle = '#e74c3c'; 
+            timerContext.beginPath(); timerContext.arc(120, 210, 20, 0, Math.PI*2); timerContext.fill();
+            timerContext.fillStyle = '#3498db'; 
+            timerContext.beginPath(); timerContext.arc(256, 210, 20, 0, Math.PI*2); timerContext.fill();
+            if (timerTexture) timerTexture.needsUpdate = true;
+        }
+
+        function createDistanceIndicator() {
+            if (sIndicator) scene.remove(sIndicator);
+            sIndicator = new THREE.Group();
+            
+            const lineColor = 0x000000; 
+            const lineMat = new THREE.MeshBasicMaterial({ color: lineColor });
+            
+            const topExt = new THREE.Mesh(new THREE.BoxGeometry(1, 0.002, 0.002), lineMat);
+            topExt.name = "topExt";
+            sIndicator.add(topExt);
+
+            const botExt = new THREE.Mesh(new THREE.BoxGeometry(1, 0.002, 0.002), lineMat);
+            botExt.name = "botExt";
+            sIndicator.add(botExt);
+
+            const dimLine = new THREE.Mesh(new THREE.BoxGeometry(0.002, 1, 0.002), lineMat);
+            dimLine.name = "dimLine";
+            sIndicator.add(dimLine);
+
+            const arrowGeo = new THREE.ConeGeometry(0.008, 0.02, 8);
+            const arrowTop = new THREE.Mesh(arrowGeo, lineMat);
+            arrowTop.name = "arrowTop";
+            sIndicator.add(arrowTop);
+
+            const arrowBot = new THREE.Mesh(arrowGeo, lineMat);
+            arrowBot.rotation.x = Math.PI; 
+            arrowBot.name = "arrowBot";
+            sIndicator.add(arrowBot);
+
+            const labelGeo = new THREE.PlaneGeometry(0.15, 0.08); 
+            const labelMat = new THREE.MeshBasicMaterial({ 
+                color: 0xffffff, transparent: true, opacity: 0, side: THREE.DoubleSide 
+            }); 
+            const label = new THREE.Mesh(labelGeo, labelMat);
+            label.name = "label";
+            sIndicator.add(label);
+
+            scene.add(sIndicator);
+        }
+
+        function updateDistanceIndicator(yStart, yEnd, sValue) {
+            if (!sIndicator) return;
+
+            const topExt = sIndicator.getObjectByName("topExt");
+            const botExt = sIndicator.getObjectByName("botExt");
+            const dimLine = sIndicator.getObjectByName("dimLine");
+            const arrowTop = sIndicator.getObjectByName("arrowTop");
+            const arrowBot = sIndicator.getObjectByName("arrowBot");
+            const label = sIndicator.getObjectByName("label");
+
+            const dimX = -0.2; 
+            const startX = 0; 
+            const extLength = Math.abs(dimX) + 0.02; 
+            const extX = (startX + dimX - 0.02) / 2; 
+            const zPos = -0.08; 
+
+            topExt.scale.x = extLength;
+            topExt.position.set(extX, yStart, zPos);
+
+            botExt.scale.x = extLength;
+            botExt.position.set(extX, yEnd, zPos);
+
+            const sHeight = Math.abs(yStart - yEnd);
+            const midY = (yStart + yEnd) / 2;
+            
+            dimLine.scale.y = sHeight - 0.04; 
+            dimLine.position.set(dimX, midY, zPos);
+
+            arrowTop.position.set(dimX, yStart - 0.01, zPos); 
+            arrowBot.position.set(dimX, yEnd + 0.01, zPos);
+
+            label.position.set(dimX - 0.08, midY, zPos); 
+            label.rotation.set(0, 0, 0); 
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.fillStyle = '#000000';
+            ctx.font = 'bold 40px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(`s = ${sValue.toFixed(2)}m`, 240, 64);
+
+            if (label.material.map) label.material.map.dispose();
+            label.material.map = new THREE.CanvasTexture(canvas);
+            label.material.needsUpdate = true;
+            label.material.map.minFilter = THREE.LinearFilter;
+            label.material.opacity = 1;
+            label.material.transparent = true;
+        }
+
+        function updateWires() {
+            if (gateWire) { scene.remove(gateWire); gateWire.geometry.dispose(); }
+            if (magnetWire) { scene.remove(magnetWire); magnetWire.geometry.dispose(); }
+
+            const wireMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.7 });
+            const plugMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+
+            const portA = new THREE.Vector3(0.25, 0.08, 0.15); 
+            const portB = new THREE.Vector3(0.25, 0.08, 0.05); 
+
+            if (photogate) {
+                const gatePos = photogate.position.clone();
+                const startPoint = new THREE.Vector3(gatePos.x + 0.06, gatePos.y, gatePos.z);
+                const slackPoint = new THREE.Vector3(gatePos.x + 0.08, gatePos.y * 0.5, gatePos.z + 0.05);
+                const floorPoint = new THREE.Vector3(0.2, 0.005, 0.15);
+                const prePlug = new THREE.Vector3(0.23, 0.08, 0.15);
+
+                const curve = new THREE.CatmullRomCurve3([startPoint, slackPoint, floorPoint, prePlug, portA]);
+                const tubeGeo = new THREE.TubeGeometry(curve, 32, 0.003, 8, false);
+                gateWire = new THREE.Mesh(tubeGeo, wireMat);
+                
+                const plug = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.02, 8), plugMat);
+                plug.rotateZ(Math.PI / 2); plug.rotateY(-Math.PI / 6); 
+                plug.position.copy(portA);
+                gateWire.add(plug);
+                scene.add(gateWire);
+            }
+
+            if (magnet) {
+                const magnetPos = new THREE.Vector3(0.06, MAGNET_Y, -0.05);
+                // Vòng ra sau trụ để tránh bi
+                const backTop = new THREE.Vector3(0.05, MAGNET_Y - 0.05, -0.12);
+                const backMid = new THREE.Vector3(0.05, 0.6, -0.12);
+                const backBot = new THREE.Vector3(0.05, 0.05, -0.12);
+                const sideFloor = new THREE.Vector3(0.15, 0.005, -0.05); 
+                const prePlug = new THREE.Vector3(0.23, 0.08, 0.05);
+
+                const curve = new THREE.CatmullRomCurve3([magnetPos, backTop, backMid, backBot, sideFloor, prePlug, portB]);
+                const tubeGeo = new THREE.TubeGeometry(curve, 64, 0.003, 8, false);
+                magnetWire = new THREE.Mesh(tubeGeo, wireMat);
+
+                const plug = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.02, 8), plugMat);
+                plug.rotateZ(Math.PI / 2); plug.rotateY(-Math.PI / 6);
+                plug.position.copy(portB);
+                magnetWire.add(plug);
+                scene.add(magnetWire);
+            }
+        }
+
+        function resetBallPosition() {
+            // Bi treo ngay dưới đáy nam châm, căn giữa tại z=0
+            ballStartY = MAGNET_Y - 0.04 - BALL_RADIUS; 
+            if(ball) {
+                ball.position.set(0, ballStartY, 0);
+                ball.rotation.set(0,0,0);
+            }
+        }
+
+        function createApparatus() {
+            // Đế
+            const baseGeo = new THREE.BoxGeometry(0.4, 0.05, 0.3);
+            const baseMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, roughness: 0.5, metalness: 0.2 });
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            base.position.y = 0.025; base.receiveShadow = true; base.castShadow = true;
+            scene.add(base);
+
+            // Cọc
+            const pillarGeo = new THREE.BoxGeometry(0.04, PILLAR_HEIGHT, 0.04);
+            const rulerMat = new THREE.MeshBasicMaterial({ map: createRulerTexture() });
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0x95a5a6, roughness: 0.3, metalness: 0.8 });
+            const materials = [metalMat, metalMat, metalMat, metalMat, rulerMat, metalMat];
+            pillar = new THREE.Mesh(pillarGeo, materials);
+            pillar.position.set(0, PILLAR_HEIGHT/2, -0.1); pillar.castShadow = true;
+            scene.add(pillar);
+
+            // Nam châm (Đặt tại z=0)
+            const magnetGeo = new THREE.BoxGeometry(0.12, 0.08, 0.15);
+            const magnetMat = new THREE.MeshStandardMaterial({ color: 0x34495e, roughness: 0.4, metalness: 0.3 });
+            magnet = new THREE.Mesh(magnetGeo, magnetMat);
+            magnet.position.set(0, MAGNET_Y, 0); // Z=0 để bi rơi chính giữa
+            magnet.castShadow = true;
+            scene.add(magnet);
+
+            // Bi
+            const ballGeo = new THREE.SphereGeometry(BALL_RADIUS, 64, 64);
+            const ballMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 1.0, roughness: 0.1 });
+            ball = new THREE.Mesh(ballGeo, ballMat);
+            ball.castShadow = true;
+            resetBallPosition(); 
+            scene.add(ball);
+
+            // Cổng quang
+            photogate = new THREE.Group();
+            const gateMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8, metalness: 0.1 }); 
+            const mountMat = new THREE.MeshStandardMaterial({ color: 0x7f8c8d, roughness: 0.5, metalness: 0.5 });
+            const sensorMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+            // U-shape parts centered at z=0
+            const uBase = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.03), gateMat);
+            uBase.position.set(0, 0, -0.05); // Back
+            const uLeft = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.1), gateMat);
+            uLeft.position.set(-0.05, 0, 0); 
+            const uRight = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.1), gateMat);
+            uRight.position.set(0.05, 0, 0); 
+
+            const eyeGeo = new THREE.CylinderGeometry(0.003, 0.003, 0.005, 16);
+            eyeGeo.rotateZ(Math.PI / 2); 
+            const sensorLeft = new THREE.Mesh(eyeGeo, sensorMat);
+            sensorLeft.position.set(-0.04, 0, 0); 
+            const sensorRight = new THREE.Mesh(eyeGeo, sensorMat);
+            sensorRight.position.set(0.04, 0, 0);
+
+            // Mount to pillar
+            const uMount = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.06), mountMat);
+            uMount.position.set(0, 0, -0.08); // Connect to pillar at z=-0.1
+
+            photogate.add(uBase, uLeft, uRight, sensorLeft, sensorRight, uMount);
+            scene.add(photogate);
+
+            // Hộp chắn (Center at x=0, z=0)
+            const boxWallMat = new THREE.MeshStandardMaterial({ color: 0x8e44ad, roughness: 0.6 });
+            const sandMat = new THREE.MeshStandardMaterial({ color: 0xf39c12, roughness: 1 });
+            catchBox = new THREE.Group();
+            
+            const floor = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.01, 0.14), sandMat);
+            floor.position.y = 0.005;
+            
+            const targetGeo = new THREE.CircleGeometry(0.02, 32);
+            targetGeo.rotateX(-Math.PI / 2);
+            const targetMat = new THREE.MeshBasicMaterial({ color: 0xe74c3c });
+            const target = new THREE.Mesh(targetGeo, targetMat);
+            target.position.y = 0.011;
+
+            const wall1 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.01), boxWallMat);
+            wall1.position.set(0, 0.03, 0.075);
+            const wall2 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.06, 0.01), boxWallMat);
+            wall2.position.set(0, 0.03, -0.075);
+            const wall3 = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.06, 0.14), boxWallMat);
+            wall3.position.set(0.075, 0.03, 0);
+            const wall4 = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.06, 0.14), boxWallMat);
+            wall4.position.set(-0.075, 0.03, 0);
+            
+            catchBox.add(floor, target, wall1, wall2, wall3, wall4);
+            catchBox.position.set(0, 0.05, 0); // On base
+            scene.add(catchBox);
+
+            // Đồng hồ
+            const timerGeo = new THREE.BoxGeometry(0.3, 0.15, 0.2);
+            const timerFaceMat = new THREE.MeshBasicMaterial({ map: initTimerTexture() });
+            const timerBodyMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.5 });
+            const timerMaterials = [timerBodyMat, timerBodyMat, timerBodyMat, timerBodyMat, timerFaceMat, timerBodyMat];
+            timerBox = new THREE.Mesh(timerGeo, timerMaterials);
+            timerBox.position.set(0.4, 0.075, 0.1); 
+            timerBox.rotation.y = -Math.PI / 6;
+            timerBox.castShadow = true;
+            scene.add(timerBox);
+
+            createDistanceIndicator();
+            updateWires();
+            updateApparatusVisuals();
+        }
+
+        function updateApparatusVisuals() {
+            resetBallPosition(); 
+            const targetSensorY = ballStartY - measurementDistance;
+            photogate.position.y = targetSensorY;
+            updateDistanceIndicator(ballStartY, targetSensorY, measurementDistance);
+            updateWires(); 
+        }
+
+        function startDrop() {
+            if (isDropping) return;
+            isDropping = true;
+            isFinished = false;
+            startTime = performance.now();
+            
+            const errorFactor = 1 + (Math.random() * 0.02 - 0.01); 
+            const theoreticalTime = Math.sqrt((2 * measurementDistance) / REAL_GRAVITY);
+            measuredTime = theoreticalTime * errorFactor;
+            
+            // Mặt cát: 0.05 (base) + 0.01 (floor) = 0.06
+            // Stop center: 0.06 + radius = 0.075
+            const stopY = 0.075; 
+            const dropHeightToStop = ballStartY - stopY;
+            totalFallTime = Math.sqrt((2 * dropHeightToStop) / REAL_GRAVITY);
+
+            document.getElementById('btnDrop').disabled = true;
+            document.getElementById('btnDrop').classList.add('opacity-50', 'cursor-not-allowed');
+            document.getElementById('heightSlider').disabled = true;
+        }
+
+        function resetExperiment() {
+            isDropping = false;
+            isFinished = false;
+            resetBallPosition();
+            const zeroTime = "0.000";
+            document.getElementById('timerDisplay').innerText = zeroTime;
+            updateTimerDisplay(zeroTime);
+            document.getElementById('btnDrop').disabled = false;
+            document.getElementById('btnDrop').classList.remove('opacity-50', 'cursor-not-allowed');
+            document.getElementById('heightSlider').disabled = false;
+        }
+
+        function addMeasurement(h, t) {
+            const t2 = t * t;
+            const g_calc = (2 * h) / t2;
+            measurements.push({ s: h, t: t, t2: t2, g: g_calc });
+            updateTableAndStats();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const now = performance.now();
+            
+            if (isDropping && !isFinished) {
+                let t = (now - startTime) / 1000;
+                const g_apparent = (2 * measurementDistance) / (measuredTime * measuredTime);
+                const stopY = 0.075; 
+
+                if (t <= measuredTime) {
+                    const timeStr = t.toFixed(3);
+                    document.getElementById('timerDisplay').innerText = timeStr;
+                    if (timeStr !== lastTimerStr) {
+                        updateTimerDisplay(timeStr);
+                        lastTimerStr = timeStr;
+                    }
+                    ball.position.y = ballStartY - 0.5 * g_apparent * t * t;
+                } else {
+                    const finalTimeStr = measuredTime.toFixed(3);
+                    document.getElementById('timerDisplay').innerText = finalTimeStr;
+                    if (finalTimeStr !== lastTimerStr) {
+                        updateTimerDisplay(finalTimeStr);
+                        lastTimerStr = finalTimeStr;
+                    }
+                    let currentY = ballStartY - 0.5 * g_apparent * t * t;
+                    if (currentY <= stopY) {
+                        ball.position.y = stopY;
+                        isFinished = true;
+                        addMeasurement(measurementDistance, measuredTime);
+                        document.getElementById('btnDrop').disabled = false;
+                        document.getElementById('btnDrop').classList.remove('opacity-50', 'cursor-not-allowed');
+                        document.getElementById('heightSlider').disabled = false;
+                        isDropping = false;
+                    } else {
+                        ball.position.y = currentY;
+                    }
+                }
+            }
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function init() {
+            initChart(); 
+            
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xdce6f2); 
+            scene.fog = new THREE.Fog(0xdce6f2, 2, 6);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0.4, 0.7, 1.0); 
+            
+            try {
+                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(window.devicePixelRatio); 
+                renderer.shadowMap.enabled = true;
+                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                renderer.outputEncoding = THREE.sRGBEncoding;
+                container.appendChild(renderer.domElement);
+            } catch (e) {
+                console.error("WebGL init failed", e);
+                container.innerHTML = '<div class="text-red-500">Lỗi WebGL</div>';
+                return;
+            }
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.target.set(0, 0.5, 0); 
+            controls.update();
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(2, 4, 2);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048; 
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            createLabEnvironment();
+            createApparatus(); 
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(window.devicePixelRatio);
+            });
+            
+            document.getElementById('heightSlider').addEventListener('input', (e) => {
+                measurementDistance = parseFloat(e.target.value);
+                document.getElementById('heightDisplay').innerText = measurementDistance.toFixed(2);
+                updateApparatusVisuals();
+            });
+
+            document.getElementById('btnDrop').addEventListener('click', startDrop);
+            document.getElementById('btnReset').addEventListener('click', resetExperiment);
+            
+            document.getElementById('btnClearData').addEventListener('click', () => {
+                measurements = [];
+                updateTableAndStats();
+            });
+            
+            document.getElementById('btnDrawTrendline').addEventListener('click', drawTrendline);
+
+            const tabTable = document.getElementById('tabTable');
+            const tabGraph = document.getElementById('tabGraph');
+            const viewTable = document.getElementById('viewTable');
+            const viewGraph = document.getElementById('viewGraph');
+
+            function switchTab(view) {
+                if (view === 'table') {
+                    viewTable.classList.remove('hidden'); viewTable.classList.add('flex');
+                    viewGraph.classList.add('hidden'); viewGraph.classList.remove('flex');
+                    tabTable.classList.add('border-blue-600', 'text-blue-600');
+                    tabTable.classList.remove('text-gray-500');
+                    tabGraph.classList.remove('border-blue-600', 'text-blue-600');
+                    tabGraph.classList.add('text-gray-500');
+                } else {
+                    viewTable.classList.add('hidden'); viewTable.classList.remove('flex');
+                    viewGraph.classList.remove('hidden'); viewGraph.classList.add('flex');
+                    tabGraph.classList.add('border-blue-600', 'text-blue-600');
+                    tabGraph.classList.remove('text-gray-500');
+                    tabTable.classList.remove('border-blue-600', 'text-blue-600');
+                    tabTable.classList.add('text-gray-500');
+                    if(chartInstance) {
+                        chartInstance.resize();
+                        chartInstance.update();
+                    }
+                }
+            }
+            tabTable.addEventListener('click', () => switchTab('table'));
+            tabGraph.addEventListener('click', () => switchTab('graph'));
+
+            animate();
+        }
+
+        init();
+    </script>
+</body>
+</html>
