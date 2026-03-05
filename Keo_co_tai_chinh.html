@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KÉO CO TRÍ TUỆ – 2 ĐỘI</title>
+    <style>
+        /* === RESET & BASICS === */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden; /* No scroll required */
+            background-color: #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+        }
+
+        /* === LAYOUT: 3 CỘT CỐ ĐỊNH === */
+        #game-layout {
+            display: grid;
+            grid-template-columns: 1fr 1.3fr 1fr;
+            width: 100%;
+            height: 100%;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        /* === PANELS === */
+        .panel {
+            border-radius: 24px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        /* Panel Trái (Team 1) */
+        #panel-t1 {
+            background: linear-gradient(135deg, #1e88e5, #0d47a1);
+            border: 4px solid #64b5f6;
+        }
+
+        /* Panel Phải (Team 2) */
+        #panel-t2 {
+            background: linear-gradient(135deg, #e53935, #b71c1c);
+            border: 4px solid #ef5350;
+        }
+
+        .panel-header {
+            text-align: center;
+            padding: 15px 10px;
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            background: rgba(0,0,0,0.2);
+            text-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+        }
+
+        .question-box {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px; /* Giảm padding để tăng không gian hiển thị */
+            text-align: center;
+            color: white;
+            font-size: 0.9rem; /* Giảm cỡ chữ câu hỏi để hiển thị trọn vẹn hơn */
+            font-weight: 600;
+            line-height: 1.4;
+            background: rgba(255,255,255,0.05);
+            margin: 10px;
+            border-radius: 16px;
+            overflow-y: auto;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 8px; /* Giảm khoảng cách giữa các nút */
+            padding: 10px;
+            height: 45%; /* Tăng độ cao khu vực đáp án do có các lựa chọn dài */
+        }
+
+        .option-btn {
+            background: rgba(255,255,255,0.9);
+            border: none;
+            border-radius: 16px;
+            color: #333;
+            font-size: 0.75rem; /* Giảm cỡ chữ đáp án để tránh bị tràn chữ */
+            font-weight: 700;
+            padding: 8px; /* Giảm padding của nút một chút */
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.2);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .option-btn:active {
+            transform: scale(0.95) translateY(4px);
+            box-shadow: 0 0px 0 rgba(0,0,0,0.2);
+        }
+
+        /* Feedback States */
+        .option-btn.correct { background: #4caf50; color: white; transform: scale(1.05); }
+        .option-btn.wrong { background: #f44336; color: white; transform: scale(0.95); }
+        
+        .feedback-icon {
+            position: absolute;
+            font-size: 3rem;
+            opacity: 0;
+            transition: opacity 0.2s, transform 0.2s;
+            transform: scale(0.5);
+            pointer-events: none;
+        }
+        .option-btn.correct .feedback-icon, .option-btn.wrong .feedback-icon {
+            opacity: 0.8;
+            transform: scale(1);
+        }
+
+        /* === MIDDLE AREA === */
+        #middle-area {
+            background: #f8f9fa;
+            border-radius: 24px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            border: 4px solid #ced4da;
+            overflow: hidden;
+        }
+
+        /* Main Header inside Middle Area */
+        #main-header {
+            background: #2c3e50;
+            color: #f1c40f;
+            padding: 10px;
+            text-align: center;
+            font-family: 'Courier New', Courier, monospace;
+            border-bottom: 4px solid #34495e;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10;
+        }
+        
+        #game-title {
+            font-size: 1.5rem;
+            font-weight: 900;
+            margin-bottom: 5px;
+            text-shadow: 2px 2px #000;
+        }
+
+        #scoreboard {
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            padding: 0 20px;
+        }
+
+        .score-t1 { color: #64b5f6; }
+        .score-t2 { color: #ef5350; }
+        
+        #timer-box {
+            background: #e74c3c;
+            color: white;
+            padding: 5px 20px;
+            border-radius: 20px;
+            font-size: 2rem;
+            border: 2px solid #fff;
+            box-shadow: 0 0 10px rgba(231, 76, 60, 0.8);
+            transition: transform 0.1s;
+        }
+        #timer-box.pulse { transform: scale(1.1); background: #c0392b; }
+
+        /* SVG Canvas */
+        #svg-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+        }
+        svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* === OVERLAYS === */
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            color: white;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .overlay.active {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .overlay h1 { font-size: 4rem; margin-bottom: 20px; text-transform: uppercase; text-shadow: 0 4px 10px rgba(0,0,0,0.5); text-align: center; }
+        .overlay p { font-size: 1.5rem; margin-bottom: 40px; }
+        
+        .big-btn {
+            background: #f1c40f;
+            color: #2c3e50;
+            border: none;
+            padding: 15px 40px;
+            font-size: 2rem;
+            font-weight: 900;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 6px 0 #d4ac0d;
+            transition: all 0.1s;
+        }
+        .big-btn:active {
+            transform: translateY(6px);
+            box-shadow: 0 0px 0 #d4ac0d;
+        }
+
+        /* Audio Toggle */
+        #audio-btn {
+            position: absolute;
+            top: 10px; right: 10px;
+            background: rgba(0,0,0,0.5);
+            border: none;
+            color: white;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            font-size: 1.2rem;
+            cursor: pointer;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- OVERLAYS -->
+    <div id="start-screen" class="overlay active">
+        <h1>KÉO CO TRÍ TUỆ</h1>
+        <p>Trả lời đúng để kéo dây về phía đội mình!</p>
+        <button class="big-btn" onclick="startGame()">BẮT ĐẦU</button>
+    </div>
+
+    <div id="win-screen" class="overlay">
+        <h1 id="win-title">TEAM 1 THẮNG!</h1>
+        <button class="big-btn" onclick="resetGame()">CHƠI LẠI</button>
+    </div>
+
+    <!-- MAIN GAME LAYOUT -->
+    <div id="game-layout">
+        
+        <!-- PANEL TEAM 1 (LEFT) -->
+        <div id="panel-t1" class="panel">
+            <div class="panel-header">TEAM 1</div>
+            <div id="qbox-t1" class="question-box">Đang tải câu hỏi...</div>
+            <div id="opts-t1" class="options-grid">
+                <!-- Buttons injected via JS -->
+            </div>
+            <!-- Progress bar for individual timeout visual -->
+            <div style="width: 100%; height: 5px; background: rgba(0,0,0,0.2); position: absolute; bottom: 0;">
+                <div id="prog-t1" style="width: 100%; height: 100%; background: #fff; transition: width 0.1s linear;"></div>
+            </div>
+        </div>
+
+        <!-- MIDDLE AREA (GAME AREA) -->
+        <div id="middle-area">
+            <button id="audio-btn" onclick="toggleAudio()">🔊</button>
+            <div id="main-header">
+                <div id="game-title">KHỞI NGHIỆP & TÀI CHÍNH</div>
+                <div id="scoreboard">
+                    <span class="score-t1">T1: <span id="score-t1">0</span></span>
+                    <div id="timer-box">15</div>
+                    <span class="score-t2">T2: <span id="score-t2">0</span></span>
+                </div>
+            </div>
+            
+            <div id="svg-container">
+                <!-- viewBox creates a coordinate system independent of actual screen size -->
+                <svg viewBox="-400 -200 800 400" preserveAspectRatio="xMidYMid meet">
+                    <!-- Background / Decor -->
+                    <rect x="-400" y="-200" width="800" height="400" fill="#f8f9fa" />
+                    <line x1="0" y1="-200" x2="0" y2="200" stroke="#bdc3c7" stroke-width="4" stroke-dasharray="10 10"/>
+                    <circle cx="0" cy="0" r="80" fill="none" stroke="#bdc3c7" stroke-width="4" stroke-dasharray="10 10"/>
+                    
+                    <!-- Movable Group (Rope + Characters + Marker) -->
+                    <g id="movable-group">
+                        <!-- Rope -->
+                        <path d="M -500 0 Q 0 10 500 0" stroke="#8d6e63" stroke-width="12" fill="none" stroke-linecap="round"/>
+                        <path d="M -500 -2 Q 0 8 500 -2" stroke="#a1887f" stroke-width="4" fill="none" stroke-linecap="round"/>
+                        
+                        <!-- Center Marker (Red Ribbon) -->
+                        <path d="M -10 -20 L 10 -20 L 5 0 L 10 20 L -10 20 L -5 0 Z" fill="#e53935" />
+                        <circle cx="0" cy="0" r="5" fill="#fff"/>
+
+                        <!-- Team 1 Characters (Left Side) -->
+                        <!-- Character 1 -->
+                        <g transform="translate(-150, 0)">
+                            <!-- Legs -->
+                            <line x1="0" y1="20" x2="-20" y2="60" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+                            <line x1="0" y1="20" x2="20" y2="60" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+                            <!-- Body -->
+                            <rect x="-15" y="-30" width="30" height="50" rx="10" fill="#1e88e5"/>
+                            <!-- Head -->
+                            <circle cx="0" cy="-50" r="20" fill="#ffccbc"/>
+                            <rect x="-22" y="-70" width="44" height="20" rx="5" fill="#0d47a1"/> <!-- Hat -->
+                            <!-- Arms pulling rope -->
+                            <path d="M -10 -15 Q 20 -10 40 0" stroke="#ffccbc" stroke-width="6" fill="none" stroke-linecap="round"/>
+                        </g>
+                        <!-- Character 2 -->
+                        <g transform="translate(-250, 0)">
+                            <line x1="0" y1="20" x2="-20" y2="60" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+                            <line x1="0" y1="20" x2="20" y2="60" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+                            <rect x="-15" y="-30" width="30" height="50" rx="10" fill="#1e88e5"/>
+                            <circle cx="0" cy="-50" r="20" fill="#ffccbc"/>
+                            <path d="M -10 -15 Q 20 -10 40 0" stroke="#ffccbc" stroke-width="6" fill="none" stroke-linecap="round"/>
+                        </g>
+
+                        <!-- Team 2 Characters (Right Side) -->
+                        <!-- Character 1 -->
+                        <g transform="translate(150, 0)">
+                            <line x1="0" y1="20" x2="-20" y2="60" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+                            <line x1="0" y1="20" x2="20" y2="60" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+                            <rect x="-15" y="-30" width="30" height="50" rx="10" fill="#e53935"/>
+                            <circle cx="0" cy="-50" r="20" fill="#ffccbc"/>
+                            <rect x="-22" y="-70" width="44" height="20" rx="5" fill="#b71c1c"/> <!-- Hat -->
+                            <path d="M 10 -15 Q -20 -10 -40 0" stroke="#ffccbc" stroke-width="6" fill="none" stroke-linecap="round"/>
+                        </g>
+                        <!-- Character 2 -->
+                        <g transform="translate(250, 0)">
+                            <line x1="0" y1="20" x2="-20" y2="60" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+                            <line x1="0" y1="20" x2="20" y2="60" stroke="#2c3e50" stroke-width="6" stroke-linecap="round"/>
+                            <rect x="-15" y="-30" width="30" height="50" rx="10" fill="#e53935"/>
+                            <circle cx="0" cy="-50" r="20" fill="#ffccbc"/>
+                            <path d="M 10 -15 Q -20 -10 -40 0" stroke="#ffccbc" stroke-width="6" fill="none" stroke-linecap="round"/>
+                        </g>
+                    </g>
+                    
+                    <!-- Dirt/Ground line -->
+                    <line x1="-400" y1="60" x2="400" y2="60" stroke="#d5dbdb" stroke-width="2"/>
+                </svg>
+            </div>
+        </div>
+
+        <!-- PANEL TEAM 2 (RIGHT) -->
+        <div id="panel-t2" class="panel">
+            <div class="panel-header">TEAM 2</div>
+            <div id="qbox-t2" class="question-box">Đang tải câu hỏi...</div>
+            <div id="opts-t2" class="options-grid">
+                <!-- Buttons injected via JS -->
+            </div>
+            <div style="width: 100%; height: 5px; background: rgba(0,0,0,0.2); position: absolute; bottom: 0;">
+                <div id="prog-t2" style="width: 100%; height: 100%; background: #fff; transition: width 0.1s linear;"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MAIN JAVASCRIPT -->
+    <script>
+        // === GAME DATA ===
+        const QUESTION_BANK_JSON = [
+            { id: 1, question: "Một nhóm học sinh dùng tiền hỗ trợ mua 400 “bánh ngải” Lạng Sơn để bán với tổng chi phí 800.000đ. Nhóm bán được 380 chiếc với giá 3.500đ/chiếc, dư 20 chiếc. Lợi nhuận thực tế là bao nhiêu?", options: { A: "800.000 đồng", B: "600.000 đồng", C: "530.000 đồng", D: "1.330.000 đồng" }, answer: "C" },
+            { id: 2, question: "Khi nhóm học sinh tăng số lượng “vịt quay lá mắc mật” để bán vào dịp lễ hội đền Kỳ Cùng cho khách du lịch. Khoản chi phí nào sau đây tăng theo số lượng sản phẩm?", options: { A: "Tiền thuê mặt bằng.", B: "Tiền mua vịt sống.", C: "Tiền mua lò vi sóng để quay nóng vịt.", D: "Chi phí đăng ký kinh doanh." }, answer: "B" },
+            { id: 3, question: "Gia đình cho nhóm mượn 10 triệu đồng để kinh doanh nhỏ, thỏa thuận tính lãi đơn 5%/năm. Sau 1 năm, tổng số tiền nhóm phải hoàn lại là bao nhiêu?", options: { A: "10.000.000 đồng.", B: "10.250.000 đồng.", C: "10.500.000 đồng.", D: "11.000.000 đồng." }, answer: "C" },
+            { id: 4, question: "Gia đình cho nhóm mượn 10 triệu đồng kinh doanh, tính lãi kép 5%/năm (lãi kỳ trước cộng vào gốc để tính lãi kỳ sau). Sau 2 năm, tổng số tiền phải hoàn lại là bao nhiêu?", options: { A: "11.025.000 đồng.", B: "11.000.000 đồng.", C: "10.500.000 đồng.", D: "11.500.000 đồng." }, answer: "A" },
+            { id: 5, question: "Vào mùa hè, nhóm bán phở chua rất đông khách. Sang mùa đông nhu cầu giảm rõ rệt, trong khi món coóng phù lại lên ngôi. Để ổn định doanh thu quanh năm, nhóm nên làm gì?", options: { A: "Chỉ bán phở chua quanh năm.", B: "Bán phở chua mùa hè và coóng phù mùa đông.", C: "Ngừng kinh doanh vào mùa đông.", D: "Tăng giá phở chua vào mùa đông." }, answer: "B" },
+            { id: 6, question: "Nhóm học sinh thực hiện mô hình kinh doanh “có lãi”, trích một phần lợi nhuận để lập quỹ dự phòng. Quỹ dự phòng này chủ yếu dùng để làm gì?", options: { A: "Mua sắm cá nhân.", B: "Tăng lợi nhuận nhanh.", C: "Ứng phó rủi ro bất ngờ.", D: "Chi tiêu giải trí." }, answer: "C" },
+            { id: 7, question: "Trong quá trình bán, giá lá mắc mật tăng cao làm chi phí sản xuất tăng. Để duy trì hoạt động và hạn chế rủi ro tài chính, giải pháp nào dưới đây là hợp lý nhất?", options: { A: "Giữ nguyên giá bán và chấp nhận lỗ.", B: "Ngừng kinh doanh ngay lập tức.", C: "Giảm chất lượng sản phẩm.", D: "Tối ưu chi phí hoặc điều chỉnh giá bán hợp lý." }, answer: "D" },
+            { id: 8, question: "Khi bắt đầu kinh doanh nhỏ, nhiều học sinh lựa chọn huy động vốn từ người thân để giảm áp lực tài chính ban đầu. Ưu điểm lớn nhất của hình thức này là gì?", options: { A: "Thủ tục vay vốn đơn giản.", B: "Lãi suất thấp hoặc không phải trả lãi.", C: "Không cần thế chấp tài sản.", D: "Thời gian vay vốn dài." }, answer: "B" },
+            { id: 9, question: "Một học sinh dùng toàn bộ tiền tiết kiệm nhập hàng kinh doanh khi chưa khảo sát nhu cầu thị trường và khả năng tiêu thụ sản phẩm. Tình huống này thể hiện rủi ro nào?", options: { A: "Rủi ro thị trường.", B: "Rủi ro môi trường kinh doanh.", C: "Rủi ro pháp lý.", D: "Rủi ro tài chính cá nhân." }, answer: "D" },
+            { id: 10, question: "Một homestay ở Mẫu Sơn đầu tư lắp đặt hệ thống điện Mặt Trời 5 kW phục vụ sinh hoạt và lưu trú. Xét về quản lý chi phí và phát triển bền vững, lợi ích lớn nhất là gì?", options: { A: "Có thể tăng giá phòng ngay lập tức.", B: "Giảm chi phí tiền điện trong quá trình kinh doanh.", C: "Không cần bảo trì hệ thống.", D: "Không cần vốn đầu tư ban đầu." }, answer: "B" }
+        ];
+
+        // Shuffle arrays utility
+        function shuffle(array) {
+            let currentIndex = array.length,  randomIndex;
+            while (currentIndex > 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
+        // === STATE ===
+        const WIN_THRESHOLD = 150; // marker pos to win
+        const PULL_STEP = 30; // Force pull per correct answer
+        const PENALTY_STEP = 5; // Slight pull backward on wrong/timeout
+        const TIME_PER_Q = 15; // 15 seconds global tick
+
+        let state = {
+            status: 'idle', // idle, playing, ended
+            ropePos: 0,
+            targetRopePos: 0,
+            ropeVel: 0,
+            globalTimer: TIME_PER_Q,
+            teams: [
+                { id: 0, name: 'Team 1', score: 0, qIndex: 0, locked: false, qOrder: [] },
+                { id: 1, name: 'Team 2', score: 0, qIndex: 0, locked: false, qOrder: [] }
+            ]
+        };
+
+        // DOM Elements
+        const movableGroup = document.getElementById('movable-group');
+        const timerBox = document.getElementById('timer-box');
+        
+        // === INITIALIZATION ===
+        function initGame() {
+            state.ropePos = 0;
+            state.targetRopePos = 0;
+            state.ropeVel = 0;
+            state.globalTimer = TIME_PER_Q;
+            
+            // Create independent random question orders for both teams
+            let order1 = Array.from({length: QUESTION_BANK_JSON.length}, (_, i) => i);
+            let order2 = Array.from({length: QUESTION_BANK_JSON.length}, (_, i) => i);
+            shuffle(order1); shuffle(order2);
+
+            state.teams[0] = { id: 0, name: 'Team 1', score: 0, qIndex: 0, locked: false, qOrder: order1 };
+            state.teams[1] = { id: 1, name: 'Team 2', score: 0, qIndex: 0, locked: false, qOrder: order2 };
+
+            updateScores();
+            renderQuestion(0);
+            renderQuestion(1);
+            timerBox.innerText = state.globalTimer;
+            document.getElementById('prog-t1').style.width = '100%';
+            document.getElementById('prog-t2').style.width = '100%';
+        }
+
+        function startGame() {
+            document.getElementById('start-screen').classList.remove('active');
+            initGame();
+            state.status = 'playing';
+            startAudio();
+            requestAnimationFrame(animate);
+            startTimer();
+        }
+
+        function resetGame() {
+            document.getElementById('win-screen').classList.remove('active');
+            initGame();
+            state.status = 'playing';
+        }
+
+        // === RENDERING ===
+        function renderQuestion(teamId) {
+            const team = state.teams[teamId];
+            const qData = QUESTION_BANK_JSON[team.qOrder[team.qIndex]];
+            
+            document.getElementById(`qbox-t${teamId+1}`).innerText = qData.question;
+            
+            const optsContainer = document.getElementById(`opts-t${teamId+1}`);
+            optsContainer.innerHTML = '';
+
+            // Render options (A,B,C,D)
+            Object.keys(qData.options).forEach(key => {
+                const btn = document.createElement('button');
+                btn.className = 'option-btn';
+                btn.innerHTML = `<span>${key}. ${qData.options[key]}</span><span class="feedback-icon"></span>`;
+                btn.onclick = () => handleAnswer(teamId, key, btn);
+                optsContainer.appendChild(btn);
+            });
+        }
+
+        function updateScores() {
+            document.getElementById('score-t1').innerText = state.teams[0].score;
+            document.getElementById('score-t2').innerText = state.teams[1].score;
+        }
+
+        // === LOGIC ===
+        function handleAnswer(teamId, selectedKey, btnEl) {
+            if (state.status !== 'playing') return;
+            const team = state.teams[teamId];
+            if (team.locked) return; // Prevent spam
+
+            team.locked = true;
+            const qData = QUESTION_BANK_JSON[team.qOrder[team.qIndex]];
+            const isCorrect = (selectedKey === qData.answer);
+
+            const feedbackIcon = btnEl.querySelector('.feedback-icon');
+
+            if (isCorrect) {
+                btnEl.classList.add('correct');
+                feedbackIcon.innerText = '✓';
+                team.score += 10;
+                
+                // Pull logic: Team 1 pulls negative (left), Team 2 pulls positive (right)
+                const pullDir = teamId === 0 ? -1 : 1;
+                state.targetRopePos += (PULL_STEP * pullDir);
+                
+                // Recoil effect (Anticipation)
+                state.ropeVel += (15 * -pullDir); 
+                
+                playBeep(800, 'sine', 0.1);
+            } else {
+                btnEl.classList.add('wrong');
+                feedbackIcon.innerText = '✕';
+                
+                // Penalty: slight pull in opponent's direction
+                const penaltyDir = teamId === 0 ? 1 : -1;
+                state.targetRopePos += (PENALTY_STEP * penaltyDir);
+                
+                playBeep(200, 'sawtooth', 0.2);
+            }
+
+            updateScores();
+            checkWin();
+
+            // Next question delay
+            setTimeout(() => {
+                if(state.status !== 'playing') return;
+                team.qIndex = (team.qIndex + 1) % QUESTION_BANK_JSON.length;
+                team.locked = false;
+                renderQuestion(teamId);
+            }, 1000);
+        }
+
+        function applyTimeoutPenalty(teamId) {
+            const team = state.teams[teamId];
+            if (team.locked) return; // Already answered
+            
+            team.locked = true;
+            // Penalty pull
+            const penaltyDir = teamId === 0 ? 1 : -1;
+            state.targetRopePos += (PENALTY_STEP * penaltyDir);
+            
+            // Visual feedback on container
+            const panel = document.getElementById(`panel-t${teamId+1}`);
+            panel.style.filter = 'brightness(0.5)';
+            
+            setTimeout(() => {
+                if(state.status !== 'playing') return;
+                panel.style.filter = 'none';
+                team.qIndex = (team.qIndex + 1) % QUESTION_BANK_JSON.length;
+                team.locked = false;
+                renderQuestion(teamId);
+            }, 800);
+        }
+
+        function checkWin() {
+            if (state.targetRopePos <= -WIN_THRESHOLD || state.ropePos <= -WIN_THRESHOLD) {
+                endGame(0);
+            } else if (state.targetRopePos >= WIN_THRESHOLD || state.ropePos >= WIN_THRESHOLD) {
+                endGame(1);
+            }
+        }
+
+        function endGame(winnerId) {
+            state.status = 'ended';
+            const winTitle = document.getElementById('win-title');
+            winTitle.innerText = winnerId === 0 ? "TEAM 1 CHIẾN THẮNG!" : "TEAM 2 CHIẾN THẮNG!";
+            winTitle.style.color = winnerId === 0 ? "#64b5f6" : "#ef5350";
+            document.getElementById('win-screen').classList.add('active');
+            playBeep(winnerId === 0 ? 600 : 800, 'square', 0.5, 0.5);
+            setTimeout(() => playBeep(winnerId === 0 ? 800 : 1000, 'square', 0.5, 1.0), 100);
+        }
+
+        // === TIMERS ===
+        let timerInterval;
+        function startTimer() {
+            clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                if (state.status !== 'playing') return;
+                
+                state.globalTimer--;
+                timerBox.innerText = state.globalTimer;
+                
+                // Visual Pulse
+                if(state.globalTimer <= 5) {
+                    timerBox.classList.add('pulse');
+                    setTimeout(() => timerBox.classList.remove('pulse'), 200);
+                    playBeep(400, 'square', 0.05);
+                }
+
+                // Update Progress bars
+                const pct = (state.globalTimer / TIME_PER_Q) * 100;
+                document.getElementById('prog-t1').style.width = pct + '%';
+                document.getElementById('prog-t2').style.width = pct + '%';
+
+                if (state.globalTimer <= 0) {
+                    // Timeout hit! Apply penalties to anyone who hasn't answered
+                    applyTimeoutPenalty(0);
+                    applyTimeoutPenalty(1);
+                    
+                    state.globalTimer = TIME_PER_Q; // Reset
+                }
+            }, 1000);
+        }
+
+        // === ANIMATION LOOP ===
+        function animate() {
+            if (state.status === 'playing' || Math.abs(state.targetRopePos - state.ropePos) > 0.1) {
+                // Spring Physics
+                const tension = 0.08;
+                const friction = 0.82;
+                
+                let force = (state.targetRopePos - state.ropePos) * tension;
+                state.ropeVel += force;
+                state.ropeVel *= friction;
+                state.ropePos += state.ropeVel;
+
+                // Clamp visual position so it doesn't fly infinitely
+                let displayPos = Math.max(-250, Math.min(250, state.ropePos));
+                
+                // Apply transform
+                movableGroup.style.transform = `translate3d(${displayPos}px, 0, 0)`;
+                
+                if (state.status === 'playing') checkWin();
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // === PROCEDURAL AUDIO (WebAudio API) ===
+        let audioCtx;
+        let masterGain;
+        let isMuted = false;
+        let bgmInterval;
+
+        function startAudio() {
+            if (audioCtx) return;
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = 0.2;
+                masterGain.connect(audioCtx.destination);
+                
+                // Simple procedural drum/bass loop for tension
+                let tick = 0;
+                bgmInterval = setInterval(() => {
+                    if (state.status !== 'playing' || isMuted) return;
+                    let freq = (tick % 4 === 0) ? 60 : 80;
+                    playBeep(freq, 'sine', 0.1, 0.2);
+                    tick++;
+                }, 500);
+            } catch (e) {
+                console.log("WebAudio not supported", e);
+            }
+        }
+
+        function toggleAudio() {
+            isMuted = !isMuted;
+            document.getElementById('audio-btn').innerText = isMuted ? '🔇' : '🔊';
+            if (masterGain) {
+                masterGain.gain.value = isMuted ? 0 : 0.2;
+            }
+        }
+
+        function playBeep(freq, type = 'sine', vol = 0.1, dur = 0.1) {
+            if (!audioCtx || isMuted) return;
+            let osc = audioCtx.createOscillator();
+            let gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+            
+            osc.connect(gain);
+            gain.connect(masterGain);
+            osc.start();
+            osc.stop(audioCtx.currentTime + dur);
+        }
+
+    </script>
+</body>
+</html>
